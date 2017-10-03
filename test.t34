@@ -1,0 +1,4 @@
+dump 
+parse 0c5
+parse 0c4 0cA
+exit
