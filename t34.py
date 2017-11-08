@@ -23,34 +23,40 @@ T34>> help parse
 T34>> exit
 $
 '''
+from inspect import cleandoc
 import sys
 from traceback import print_exc
 
+class T34_Register(dict):
+    def __init__(self):
+        pass
+        
+        
 class T34:
     '''Welcome to the T34 Emulator!
 
-Available commands:
+    Available commands:
 
-    help: 
-        Prints documentation for the emulator with no arguments or the 
-        documentation for a the single command listed as an argument
-        
-    dump:
-        Prints the location and data for all memory addresses containing 
-        non-zero data
-        
-    parse:
-        Parses the instruction at a given memory address or range of addresses
-        into the corresponding operand addr, opcode, and addressing mode.
+        help: 
+            Prints documentation for the emulator with no arguments or the 
+            documentation for a the single command listed as an argument
+            
+        dump:
+            Prints the location and data for all memory addresses containing 
+            non-zero data
+            
+        parse:
+            Parses the instruction at a given memory address or range of addresses
+            into the corresponding operand addr, opcode, and addressing mode.
             
     '''
     
     def __init__(self, fname):
         '''
-Loads the specified T34 object file into memory
+        Loads the specified T34 object file into memory
 
-ARGS:
-    <fname>: the path to a valid T34 object file
+        ARGS:
+            <fname>: the path to a valid T34 object file
         '''
         T34.cmds = {
             "help": T34.help,
@@ -75,32 +81,32 @@ ARGS:
     
     def help(self, cmd = None):
         '''
-Prints the docstring describing the usage of the the given command.
+        Prints the docstring describing the usage of the the given command.
 
-ARGS:
-    [cmd]: name of the command 
+        ARGS:
+            [cmd]: name of the command 
         '''
         if cmd is None:
-            print(self.__doc__[self.__doc__.find("Available"):])
+            print(cleandoc(self.__doc__[self.__doc__.find("Available"):]))
         else:
-            print(T34.cmds[cmd].__doc__)
+            print(cleandoc(T34.cmds[cmd].__doc__))
        
             
     def parse(self,start_addr,end_addr=None):
         '''
-Parses the data stored at the given address or range of addresses. The first 
-12 bits are interpretted as the operand address, the next 6 bits are the opcode
-and the last 6 bits are the addressing mode. 
+        Parses the data stored at the given address or range of addresses. The first 
+        12 bits are interpretted as the operand address, the next 6 bits are the opcode
+        and the last 6 bits are the addressing mode. 
 
-When using range, it only parses non-zero memory locations
+        When using range, it only parses non-zero memory locations
 
-USAGE: 
-    T34>> parse <start_addr> [end_addr]
-    
-ARGS:
-    <start_addr>: The address to parse or the starting address of range
-    
-    [end_addr]: The end address of the range (not inclusive)
+        USAGE: 
+            T34>> parse <start_addr> [end_addr]
+            
+        ARGS:
+            <start_addr>: The address to parse or the starting address of range
+            
+            [end_addr]: The end address of the range (not inclusive)
         '''
         header = "          ADDR       OP     AM"
         fstr = "{:03x}:  {:012b} {:06b} {:06b}"
@@ -119,32 +125,33 @@ ARGS:
         
     def dump(self):
         '''
-Prints information at every memory location where the stored data is not zero.
+        Prints information at every memory location where the stored data is not zero.
 
-USAGE:
-    T34>> dump 
-    
-ARGS: None
+        USAGE:
+            T34>> dump 
+            
+        ARGS: None
         '''
         fstr = "{:03x}:  {:06x}"
         print( "\n".join( list( fstr.format(i,m) for i,m in enumerate(self.mem) if m > 0))) 
         print() 
         
+    def trace(self, instr, 
     def run(self, from_script = False, verbose = False, * , script_name = None):
         '''
-Starts the T34 Emulator with the desired interface.
+        Starts the T34 Emulator with the desired interface.
 
-ARGS:
-    [from_script]: Flag indicating the emulator should run commands from a script
-        provided at the command line
-    
-    [verbose]: Flag indicating whether commands should be echoed when running
-        a script.
-        
-    [script_name]: Name of the script file to be loaded.
+        ARGS:
+            [from_script]: Flag indicating the emulator should run commands from a script
+                provided at the command line
+            
+            [verbose]: Flag indicating whether commands should be echoed when running
+                a script.
+                
+            [script_name]: Name of the script file to be loaded.
         '''
         if not from_script or verbose: 
-            print("\n" + __doc__ )
+            print("\n" + cleandoc(__doc__) )
             
         if from_script:
             f = open( script_name )
