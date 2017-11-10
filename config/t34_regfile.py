@@ -1,22 +1,22 @@
 reginfo = {
     "MAR": {
-        "size": 12, "name": "Memory Address Register", 
+        "size": 12, "name": "Memory Address Register",
         "description": "Address of the memory location which is to be loaded from or stored into.",
     },
-    "IC": { 
+    "IC": {
         "size": 12, "name": "Instruction Counter",
         "description": "Address of the next instruction to be fetched, decoded, and executed.",
     },
-    **{ "X{}".format(i): {
+    **{"X{}".format(i): {
         "size": 12, "name": "Index Registers",
         "description": "Contain values to be used in calculating memory addresses",
-    } for i in range(4) },
+    } for i in range(4)},
     "ABUS": {
         "size": 12, "name": "Address Bus",
         "description": "Used when addresses are to be moved.",
     },
     "MDR": {
-        "size": 24, "name": "Memory Data Register", 
+        "size": 24, "name": "Memory Data Register",
         "description": "Data to be written into, or data most recently read from, memory."
     },
     "AC": {
