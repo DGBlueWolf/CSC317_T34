@@ -1,0 +1,85 @@
+def LR 0xfff
+def SP 0xffe
+set SP 0xffe000
+
+def  A* 0x000
+def  A  0x001
+setp A* A
+set  A 0x1 0x2 0x3 0x4 0x5 0x6 0x7 0x8 0x9 0xa 0xb
+def B 0x010
+set  B 0x3 0x5 0x7 0xb 0xd 0x11 0x13 0x17 0x1d 0x1f 0x25
+def C 0x020
+
+# We're going to assume that for function calls:
+#    X2 = LR
+#    X3 = SP
+
+
+# UNSIGNED MULTIPLY (24,24) -> 24
+lab umul24
+    param aa, bb
+    local mask, shift
+    returns res aa
+
+    # Initialize memory
+    CLR Immediate 0x0
+    EM Indexed X3 aa
+    ST Indexed X3 shift
+    CLR Immediate 0x0
+    ADD Immediate 0x001
+    ST Indexed X3 mask
+
+    lab umul24.start
+        LD Indexed X3 bb
+        AND Indexed X3 mask
+        JZ Direct umul24.shift
+            LD Indexed X3 res
+            ADD Indexed X3 shift
+            ST Indexed X3 res
+            lab umul24.shift
+        LD Indexed X3 shift
+        ADD Indexed X3 shift
+        JZ Direct umul24.end
+        ST Indexed X3 shift
+        LD Indexed X3 mask
+        ADD Indexed X3 mask
+        ST Indexed X3 mask
+        J Direct umul24.start
+        lab umul24.end
+    return
+
+start 0x100
+# SQUARE ARRAY where the array is [0,1,2,3,4,5,6,7,8,9,10]
+LDX Direct X3 SP
+local i, a, b
+LD Immediate 0x00b
+LDX Immediate X0 0x0
+lab start
+    ST Indexed X3 i
+    LD Indexed X0 A
+    ST Indexed X3 a
+    LD Indexed X0 B
+    ST Indexed X3 b
+
+    SUBX Immediate X3 0x3
+    link umul24
+    LD Indexed X3 0x0
+    ST Indexed X0 C
+    ADDX Immediate X3 0x3
+
+    LD Indexed X3 i
+    SUB Immediate 0x1
+    JZ Direct end
+    ADDX Immediate X0 0x1
+    J Direct start
+    lab end
+
+LDX Immediate X0 0x0
+lab outloop
+    LD Indexed X0 C
+    ADDX Immediate X0 0x1
+    JZ Direct outend
+    J Direct outloop
+    lab outend
+HALT Immediate 0x0
+

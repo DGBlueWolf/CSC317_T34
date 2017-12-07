@@ -24,6 +24,7 @@ T34>> exit
 $
 """
 import sys
+
 from t34_exceptions import *
 from t34_instructions import *
 from t34_regfile import *
@@ -72,28 +73,39 @@ class T34:
         # Set up instruction lookups
         self.decoded_instr = 0, 0, 0, 0
         self.instr = {k: v for k, v in instructions.items()}
-        self.instr[0b000000]["op"] = self.__instr_halt__
-        self.instr[0b000001]["op"] = self.__instr_nop__
-        self.instr[0b110011]["op"] = self.__instr_jp__
-        self.instr[0b010000]["op"] = self.__instr_ld__
-        self.instr[0b010001]["op"] = self.__instr_st__
-        self.instr[0b010010]["op"] = self.__instr_em__
-        self.instr[0b011000]["op"] = self.__instr_ldx__
-        self.instr[0b011001]["op"] = self.__instr_stx__
-        self.instr[0b011010]["op"] = self.__instr_emx__
-        self.instr[0b100000]["op"] = self.__instr_add__
-        self.instr[0b100001]["op"] = self.__instr_sub__
-        self.instr[0b100010]["op"] = self.__instr_clr__
-        self.instr[0b100011]["op"] = self.__instr_com__
-        self.instr[0b100110]["op"] = self.__instr_xor__
-        self.instr[0b101000]["op"] = self.__instr_addx__
-        self.instr[0b101001]["op"] = self.__instr_subx__
-        self.instr[0b101010]["op"] = self.__instr_clrx__
-        self.instr[0b110000]["op"] = self.__instr_j__
-        self.instr[0b110001]["op"] = self.__instr_jz__
-        self.instr[0b110010]["op"] = self.__instr_jn__
-        self.instr[0b100100]["op"] = self.__instr_and__
-        self.instr[0b100101]["op"] = self.__instr_or__
+        self.instr[self.instr["HALT"]]["op"] = self.__instr_halt__
+        self.instr[self.instr["NOP"]]["op"] = self.__instr_nop__
+        self.instr[self.instr["JP"]]["op"] = self.__instr_j__
+        self.instr[self.instr["LD"]]["op"] = self.__instr_ld__
+        self.instr[self.instr["ST"]]["op"] = self.__instr_st__
+        self.instr[self.instr["EM"]]["op"] = self.__instr_em__
+        self.instr[self.instr["LDX"]]["op"] = self.__instr_ldx__
+        self.instr[self.instr["STX"]]["op"] = self.__instr_stx__
+        self.instr[self.instr["EMX"]]["op"] = self.__instr_emx__
+        self.instr[self.instr["ADD"]]["op"] = self.__instr_alu__
+        self.instr[self.instr["SUB"]]["op"] = self.__instr_alu__
+        self.instr[self.instr["COM"]]["op"] = self.__instr_alu__
+        self.instr[self.instr["CLR"]]["op"] = self.__instr_alu__
+        self.instr[self.instr["AND"]]["op"] = self.__instr_alu__
+        self.instr[self.instr["OR"]]["op"] = self.__instr_alu__
+        self.instr[self.instr["XOR"]]["op"] = self.__instr_alu__
+        self.instr[self.instr["ADDX"]]["op"] = self.__instr_alux__
+        self.instr[self.instr["SUBX"]]["op"] = self.__instr_alux__
+        self.instr[self.instr["CLRX"]]["op"] = self.__instr_alux__
+        self.instr[self.instr["J"]]["op"] = self.__instr_j__
+        self.instr[self.instr["JZ"]]["op"] = self.__instr_j__
+        self.instr[self.instr["JN"]]["op"] = self.__instr_j__
+        self.instr[self.instr["JP"]]["op"] = self.__instr_j__
+
+        self.aluop = {
+            self.instr["ADD"] & 0b111: lambda x, y: x + y,
+            self.instr["SUB"] & 0b111: lambda x, y: x - y,
+            self.instr["CLR"] & 0b111: lambda x, y: 0,
+            self.instr["COM"] & 0b111: lambda x, y: ~x,
+            self.instr["AND"] & 0b111: lambda x, y: x & y,
+            self.instr["OR"] & 0b111: lambda x, y: x | y,
+            self.instr["XOR"] & 0b111: lambda x, y: x ^ y,
+        }
 
         # setup registers from config
         self.regfile = {k: v for k, v in reginfo.items()}
@@ -129,40 +141,37 @@ class T34:
     # Addressing Control Path functions
     def __get_ea__(self):
         addr, opcode, mode, ir = self.decoded_instr
-        ic = False
         if mode not in self.addr:
             raise IllegalAddressingMode
-        if opcode & 0b110000 == 0:
-            ic = True
         self.addr[mode]["op"](addr, ir)
 
     def __am_direct__(self, addr, *_):
-        self.setr('MAR', addr)
+        self.setr("MAR", addr)
 
     def __am_immediate__(self, addr, *_):
-        s1 = self.regfile['MAR']['size']
-        s2 = self.regfile['MDR']['size']
-        self.setr('MDR', T34.__sign_extend__(addr, s2, s1))
+        s1 = self.regfile["MAR"]["size"]
+        s2 = self.regfile["MDR"]["size"]
+        self.setr("MDR", T34.__sign_extend__(addr, s2, s1))
 
     def __am_indexed__(self, addr, ir):
-        raise UnimplementedAddressingMode
-        # offset = self.regfile['X{}'.format(ir)]
-        # self.setr('MAR', addr + offset)
+        offset = self.getr("X{}".format(ir))
+        self.setr("MAR", addr + offset)
 
     def __am_indirect__(self, addr, *_):
-        raise UnimplementedAddressingMode
-        # addr = self.mem[addr] >> 12
-        # self.setr('MAR',addr)
+        addr = self.mem[addr] >> 12
+        self.setr("MAR", addr)
 
     def __am_indexed_indirect__(self, addr, ir):
-        raise UnimplementedAddressingMode
-        # offset = self.regfile['X{}'.format(ir)]
-        # addr = self.mem[addr + offset]
-        # setr('MAR',addr)
+        offset = self.getr("X{}".format(ir))
+        self.setr("MAR", addr + offset)
+        addr = self.mem[self.getr("MAR")]
+        self.setr("MAR", addr >> 12)
 
     # Data path functions
     def __load__(self):
-        self.setr("MDR", self.mem[self.getr("MAR")])
+        mode = self.decoded_instr[2]
+        if self.addr[mode]["name"] != "Immediate":
+            self.setr("MDR", self.mem[self.getr("MAR")])
 
     def __load_instr__(self):
         self.setr("IR", self.mem[self.getr("IC")])
@@ -173,6 +182,11 @@ class T34:
     def __store__(self):
         self.mem[self.getr("MAR")] = self.getr("MDR")
 
+    def __check_mode__(self):
+        addr, opcode, mode, ir = self.decoded_instr
+        if mode not in self.addr or self.addr[mode]["name"] in self.instr[opcode]["illegal_am"]:
+            raise IllegalAddressingMode
+
     # Instruction definitions
     def __instr_halt__(self):
         raise Halted
@@ -181,26 +195,16 @@ class T34:
         pass
 
     def __instr_ld__(self):
-        addr, opcode, mode, ir = self.decoded_instr
-        if mode not in self.addr or self.addr[mode]["name"] in self.instr[opcode]["illegal_am"]:
-            raise IllegalAddressingMode
         self.__get_ea__()
-        if self.addr[mode]["name"] != "Immediate":
-            self.__load__()
+        self.__load__()
         self.setr("AC", self.getr("MDR"))
 
     def __instr_st__(self):
-        addr, opcode, mode, ir = self.decoded_instr
-        if mode not in self.addr or self.addr[mode]["name"] in self.instr[opcode]["illegal_am"]:
-            raise IllegalAddressingMode
         self.__get_ea__()
         self.setr("MDR", self.getr("AC"))
         self.__store__()
 
     def __instr_em__(self):
-        addr, opcode, mode, ir = self.decoded_instr
-        if mode not in self.addr or self.addr[mode]["name"] in self.instr[opcode]["illegal_am"]:
-            raise IllegalAddressingMode
         self.__get_ea__()
         self.__load__()
         self.setr("DBUS", self.getr("MDR"))
@@ -209,144 +213,65 @@ class T34:
         self.__store__()
 
     def __instr_ldx__(self):
-        raise UnimplementedOpcode
+        ir = self.decoded_instr[3]
+        self.__get_ea__()
+        self.setr("MDR", self.getr("MDR") << 12)
+        self.__load__()
+        self.setr("X{}".format(ir), self.getr("MDR") >> 12)
 
     def __instr_stx__(self):
-        raise UnimplementedOpcode
+        ir = self.decoded_instr[3]
+        self.__get_ea__()
+        self.setr("MDR", (self.getr("X{}".format(ir)) << 12) + (self.mem[self.getr("MAR")] & 0xFFF))
+        self.__store__()
 
     def __instr_emx__(self):
-        raise UnimplementedOpcode
+        ir = self.decoded_instr[3]
+        self.__get_ea__()
+        self.__load__()
+        self.setr("ABUS", self.getr("X{}".format(ir)))
+        self.setr("X{}".format(ir), self.getr("MDR") >> 12)
+        self.setr("MDR", (self.getr("ABUS") << 12) + (self.mem[self.getr("MAR")] & 0xFFF))
+        self.__store__()
 
-    def __instr_add__(self):
+    def __instr_alu__(self):
         addr, opcode, mode, ir = self.decoded_instr
-        if mode not in self.addr or self.addr[mode]["name"] in self.instr[opcode]["illegal_am"]:
-            raise IllegalAddressingMode
         self.__get_ea__()
         if self.addr[mode]["name"] != "Immediate":
             self.__load__()
         v1 = self.getr("AC")
         v2 = self.getr("MDR")
-        self.setr("AC", v1 + v2)
+        self.setr("AC", self.aluop[opcode & 0b111](v1, v2))
 
-    def __instr_sub__(self):
+    def __instr_alux__(self):
         addr, opcode, mode, ir = self.decoded_instr
-        if mode not in self.addr or self.addr[mode]["name"] in self.instr[opcode]["illegal_am"]:
-            raise IllegalAddressingMode
         self.__get_ea__()
         if self.addr[mode]["name"] != "Immediate":
             self.__load__()
-        v1 = self.getr("AC")
+            self.setr("MDR", self.getr("MDR") >> 12 )
+        v1 = self.getr("X{}".format(ir))
         v2 = self.getr("MDR")
-        self.setr("AC", v1 - v2)
-
-    def __instr_clr__(self):
-        self.setr("AC", 0)
-
-    def __instr_com__(self):
-        self.setr("AC", ~self.getr("AC"))
-
-    def __instr_and__(self):
-        addr, opcode, mode, ir = self.decoded_instr
-        if mode not in self.addr or self.addr[mode]["name"] in self.instr[opcode]["illegal_am"]:
-            raise IllegalAddressingMode
-        self.__get_ea__()
-        if self.addr[mode]["name"] != "Immediate":
-            self.__load__()
-        v1 = self.getr("AC")
-        v2 = self.getr("MDR")
-        self.setr("AC", v1 & v2)
-
-    def __instr_or__(self):
-        addr, opcode, mode, ir = self.decoded_instr
-        if mode not in self.addr or self.addr[mode]["name"] in self.instr[opcode]["illegal_am"]:
-            raise IllegalAddressingMode
-        self.__get_ea__()
-        if self.addr[mode]["name"] != "Immediate":
-            self.__load__()
-        v1 = self.getr("AC")
-        v2 = self.getr("MDR")
-        self.setr("AC", v1 | v2)
-
-    def __instr_xor__(self):
-        addr, opcode, mode, ir = self.decoded_instr
-        if mode not in self.addr or self.addr[mode]["name"] in self.instr[opcode]["illegal_am"]:
-            raise IllegalAddressingMode
-        self.__get_ea__()
-        if self.addr[mode]["name"] != "Immediate":
-            self.__load__()
-        v1 = self.getr("AC")
-        v2 = self.getr("MDR")
-        self.setr("AC", v1 ^ v2)
-
-    def __instr_addx__(self):
-        raise UnimplementedOpcode
-
-    def __instr_subx__(self):
-        raise UnimplementedOpcode
-
-    def __instr_clrx__(self):
-        raise UnimplementedOpcode
+        self.setr("X{}".format(ir), self.aluop[opcode & 0b111](v1, v2))
 
     def __instr_j__(self):
         addr, opcode, mode, ir = self.decoded_instr
-        if mode not in self.addr or self.addr[mode]["name"] in self.instr[opcode]["illegal_am"]:
-            raise IllegalAddressingMode
         self.__get_ea__()
-        self.setr("IC", self.getr("MAR"))
-
-    def __instr_jz__(self):
-        addr, opcode, mode, ir = self.decoded_instr
-        if mode not in self.addr or self.addr[mode]["name"] in self.instr[opcode]["illegal_am"]:
-            raise IllegalAddressingMode
-        self.__get_ea__()
-        if self.getr("AC") == 0:
-            self.setr("IC", self.getr("MAR"))
-
-    def __instr_jn__(self):
-        addr, opcode, mode, ir = self.decoded_instr
-        if mode not in self.addr or self.addr[mode]["name"] in self.instr[opcode]["illegal_am"]:
-            raise IllegalAddressingMode
-        self.__get_ea__()
-        if self.getr("AC") >> self.regfile["AC"]["size"] - 1 == 1:
-            self.setr("IC", self.getr("MAR"))
-
-    def __instr_jp__(self):
-        addr, opcode, mode, ir = self.decoded_instr
-        if mode not in self.addr or self.addr[mode]["name"] in self.instr[opcode]["illegal_am"]:
-            raise IllegalAddressingMode
-        self.__get_ea__()
-        v1 = self.getr("AC")
-        if v1 != 0 and v1 >> self.regfile["AC"]["size"] - 1 == 0:
+        if self.instr[opcode]['name'] == "J" or \
+                self.instr[opcode]['name'] == "JZ" and self.getr("AC") == 0 or \
+                self.instr[opcode]['name'] == "JN" and self.getr("AC") >> self.regfile["AC"]["size"] - 1 == 1 or \
+                self.instr[opcode]['name'] == "JP" and self.getr("AC") != 0 and \
+                self.getr("AC") >> self.regfile["AC"]["size"] - 1 == 0:
             self.setr("IC", self.getr("MAR"))
 
     def getr(self, name):
-        return self.regfile[name]['value']
+        return self.regfile[name]["value"]
 
     def setr(self, name, val):
-        mask = (1 << self.regfile[name]['size']) - 1
-        self.regfile[name]['value'] = val & mask
+        mask = (1 << self.regfile[name]["size"]) - 1
+        self.regfile[name]["value"] = val & mask
         return val & mask
 
     def __parse_instr__(self):
-        """
-        Parses the data stored at the given address or range of addresses. The first
-        12 bits are interpreted as the operand address, the next 6 bits are the opcode
-        and the last 6 bits are the addressing mode.
-
-        When using range, it only parses non-zero memory locations
-
-        0 < start_addr < 0x1000
-
-        Must provide addresses in hexadecimal format.
-
-        USAGE:
-            T34>> parse <start_addr> [end_addr]
-
-        ARGS:
-            <start_addr>: The address to parse or the starting address of range
-
-            [end_addr]: The end address of the range (not inclusive)
-        """
         instr = self.getr("IR")
         t_addr, s_addr = instruction_format["ADDR"]["bits"]
         t_op, s_op = instruction_format["OP"]["bits"]
@@ -367,15 +292,19 @@ class T34:
         trace = {}
         msg = ""
         while not halted:
+            # self.dump()
             try:
                 trace.update(ic=self.getr("IC"))
                 self.__load_instr__()
                 trace.update(ir=self.getr("IR"))
                 self.__parse_instr__()
+                self.__next_instr__()
                 opcode = self.decoded_instr[1]
                 if opcode not in self.instr:
                     raise UndefinedOpcode
                 trace.update(op=self.instr[opcode]["name"])
+                if self.instr[opcode]["illegal_am"] is not None:
+                    self.__check_mode__()
                 self.instr[opcode]["op"]()
             except Halted as e:
                 msg = str(e)
@@ -399,22 +328,21 @@ class T34:
                 trace.update(ea="???")
                 halted = True
             else:
+                opcode = self.decoded_instr[1]
                 mode = self.decoded_instr[2]
                 if self.addr[mode]["name"] == "Immediate":
                     trace.update(ea="IMM")
-                    self.__next_instr__()
-                elif trace["op"] in {"J", "JN", "JZ", "JP"}:
-                    trace.update(ea=self.getr("IC"))
+                elif instructions[opcode]['illegal_am'] is None:
+                    trace.update(ea="   ")
                 else:
                     trace.update(ea=self.getr("MAR"))
-                    self.__next_instr__()
             finally:
                 trace.update(ac=self.getr("AC"),
                              x0=self.getr("X0"),
                              x1=self.getr("X1"),
                              x2=self.getr("X2"),
                              x3=self.getr("X3"))
-                trace['ea'] = "{:03x}".format(trace["ea"]) if type(trace["ea"]) is int else "{:<3s}".format(trace["ea"])
+                trace["ea"] = "{:03x}".format(trace["ea"]) if type(trace["ea"]) is int else "{:<3s}".format(trace["ea"])
                 print("{ic:03x}:  {ir:06x}  {op:<4s}  {ea:}  AC[{ac:06x}]  X0[{x0:03x}]  "
                       "X1[{x1:03x}]  X2[{x2:03x}]  X3[{x3:03x}]".format(**trace))
         print(msg)
